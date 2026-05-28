@@ -96,7 +96,6 @@ export const makeSessionCredentialService = Effect.gen(function* () {
   const serverConfig = yield* ServerConfig;
   const secretStore = yield* ServerSecretStore;
   const authSessions = yield* AuthSessionRepository;
-  const crypto = yield* Crypto.Crypto;
   const signingSecret = yield* secretStore.getOrCreateRandom(SIGNING_SECRET_NAME, 32);
   const connectedSessionsRef = yield* Ref.make(new Map<string, number>());
   const changesPubSub = yield* PubSub.unbounded<SessionCredentialChange>();
