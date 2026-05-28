@@ -9,9 +9,12 @@ import * as TestClock from "effect/testing/TestClock";
 import { EnvironmentHttpUnauthorizedError } from "@t3tools/contracts";
 import {
   bootstrapRemoteBearerSession,
+  exchangeRemoteDpopAccessToken,
   fetchRemoteEnvironmentDescriptor,
+  fetchRemoteDpopSessionState,
   fetchRemoteSessionState,
   issueRemoteWebSocketToken,
+  issueRemoteDpopWebSocketToken,
   remoteHttpClientLayer,
   RemoteEnvironmentAuthInvalidJsonError,
   RemoteEnvironmentAuthTimeoutError,
@@ -105,6 +108,8 @@ describe("remote", () => {
       const result = yield* bootstrapRemoteBearerSession({
         httpBaseUrl: "https://remote.example.com/",
         credential: "pairing-token",
+        proofKeyThumbprint: "client-proof-key-thumbprint",
+        dpopProof: "dpop-proof",
       }).pipe(provideRemoteHttp(fetch.fetchFn));
 
       expect(result).toMatchObject({
@@ -117,8 +122,53 @@ describe("remote", () => {
         method: "POST",
         headers: {
           "content-type": "application/json",
+          dpop: "dpop-proof",
         },
-        body: `{"credential":"pairing-token"}`,
+        body: `{"credential":"pairing-token","proofKeyThumbprint":"client-proof-key-thumbprint"}`,
+      });
+    }),
+  );
+
+  it.effect("exchanges managed credentials and admits websocket requests with DPoP", () =>
+    Effect.gen(function* () {
+      const fetch = recordedFetch(
+        Response.json({
+          access_token: "dpop-access-token",
+          issued_token_type: "urn:ietf:params:oauth:token-type:access_token",
+          token_type: "DPoP",
+          expires_in: 3600,
+          scope: "remote:session",
+        }),
+        Response.json({
+          token: "ws-token",
+          expiresAt: "2026-05-01T12:05:00.000Z",
+        }),
+      );
+
+      const token = yield* exchangeRemoteDpopAccessToken({
+        httpBaseUrl: "https://remote.example.com/",
+        credential: "one-time-credential",
+        dpopProof: "token-proof",
+      }).pipe(provideRemoteHttp(fetch.fetchFn));
+      yield* issueRemoteDpopWebSocketToken({
+        httpBaseUrl: "https://remote.example.com/",
+        accessToken: token.access_token,
+        dpopProof: "resource-proof",
+      }).pipe(provideRemoteHttp(fetch.fetchFn));
+
+      expectFetchCall(fetch.calls, 1, {
+        url: "https://remote.example.com/api/auth/token",
+        method: "POST",
+        headers: { dpop: "token-proof", "content-type": "application/x-www-form-urlencoded" },
+        body: "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Atoken-exchange&subject_token=one-time-credential&subject_token_type=urn%3At3%3Aparams%3Aoauth%3Atoken-type%3Aenvironment-bootstrap&requested_token_type=urn%3Aietf%3Aparams%3Aoauth%3Atoken-type%3Aaccess_token&resource=https%3A%2F%2Fremote.example.com&scope=remote%3Asession",
+      });
+      expectFetchCall(fetch.calls, 2, {
+        url: "https://remote.example.com/api/auth/ws-token",
+        method: "POST",
+        headers: {
+          authorization: "DPoP dpop-access-token",
+          dpop: "resource-proof",
+        },
       });
     }),
   );
@@ -206,6 +256,40 @@ describe("remote", () => {
         method: "POST",
         headers: {
           authorization: "Bearer bearer-token",
+        },
+      });
+    }),
+  );
+
+  it.effect("loads remote session state with a DPoP-bound access token", () =>
+    Effect.gen(function* () {
+      const fetch = recordedFetch(
+        Response.json({
+          authenticated: true,
+          auth: {
+            policy: "remote-reachable",
+            bootstrapMethods: ["one-time-token"],
+            sessionMethods: ["dpop-access-token"],
+            sessionCookieName: "t3_session",
+          },
+          role: "client",
+          sessionMethod: "dpop-access-token",
+          expiresAt: "2026-05-01T12:00:00.000Z",
+        }),
+      );
+
+      yield* fetchRemoteDpopSessionState({
+        httpBaseUrl: "https://remote.example.com/",
+        accessToken: "dpop-access-token",
+        dpopProof: "dpop-proof",
+      }).pipe(provideRemoteHttp(fetch.fetchFn));
+
+      expectFetchCall(fetch.calls, 1, {
+        url: "https://remote.example.com/api/auth/session",
+        method: "GET",
+        headers: {
+          authorization: "DPoP dpop-access-token",
+          dpop: "dpop-proof",
         },
       });
     }),

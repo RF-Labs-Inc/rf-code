@@ -13,6 +13,8 @@ import {
   AuthBootstrapResult,
   AuthClientSession,
   AuthCreatePairingCredentialInput,
+  AuthDpopAccessTokenResult,
+  AuthDpopTokenExchangeRequest,
   AuthPairingCredentialResult,
   AuthPairingLink,
   AuthRevokeClientSessionInput,
@@ -32,6 +34,15 @@ import {
 
 const OptionalBearerHeaders = Schema.Struct({
   authorization: Schema.optionalKey(Schema.String),
+  dpop: Schema.optionalKey(Schema.String),
+});
+
+const OptionalDpopProofHeaders = Schema.Struct({
+  dpop: Schema.optionalKey(Schema.String),
+});
+
+const DpopProofHeaders = Schema.Struct({
+  dpop: Schema.String,
 });
 
 export class EnvironmentHttpBadRequestError extends Schema.TaggedErrorClass<EnvironmentHttpBadRequestError>()(
@@ -103,6 +114,7 @@ export interface EnvironmentSessionPrincipalShape {
   readonly method: ServerAuthSessionMethod;
   readonly role: AuthSessionRole;
   readonly expiresAt?: DateTime.DateTime;
+  readonly proofKeyThumbprint?: string;
 }
 
 export class EnvironmentSessionPrincipal extends Context.Service<
@@ -159,6 +171,7 @@ export class EnvironmentAuthHttpApi extends HttpApiGroup.make("auth")
   )
   .add(
     HttpApiEndpoint.post("bootstrap", "/api/auth/bootstrap", {
+      headers: OptionalDpopProofHeaders,
       payload: AuthBootstrapInput,
       success: AuthBootstrapResult,
       error: EnvironmentHttpAuthErrors,
@@ -166,8 +179,17 @@ export class EnvironmentAuthHttpApi extends HttpApiGroup.make("auth")
   )
   .add(
     HttpApiEndpoint.post("bootstrapBearer", "/api/auth/bootstrap/bearer", {
+      headers: OptionalDpopProofHeaders,
       payload: AuthBootstrapInput,
       success: AuthBearerBootstrapResult,
+      error: EnvironmentHttpAuthErrors,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("dpopToken", "/api/auth/token", {
+      headers: DpopProofHeaders,
+      payload: AuthDpopTokenExchangeRequest.pipe(HttpApiSchema.asFormUrlEncoded()),
+      success: AuthDpopAccessTokenResult,
       error: EnvironmentHttpAuthErrors,
     }),
   )

@@ -1,4 +1,8 @@
 import {
+  AuthAccessTokenType,
+  AuthEnvironmentBootstrapTokenType,
+  AuthRemoteSessionScope,
+  AuthTokenExchangeGrantType,
   EnvironmentHttpApi,
   EnvironmentHttpBadRequestError,
   EnvironmentHttpForbiddenError,
@@ -12,9 +16,11 @@ import {
 import type {
   AuthBootstrapInput,
   AuthCreatePairingCredentialInput,
+  AuthDpopTokenExchangeRequest,
   AuthRevokeClientSessionInput,
   AuthRevokePairingLinkInput,
 } from "@t3tools/contracts";
+import { oauthScopeSetEquals } from "@t3tools/shared/oauthScope";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -25,10 +31,28 @@ import * as HttpApiBuilder from "effect/unstable/httpapi/HttpApiBuilder";
 
 import { AuthError, ServerAuth } from "./Services/ServerAuth.ts";
 import { SessionCredentialService } from "./Services/SessionCredentialService.ts";
+import { requestAbsoluteUrl, verifyRequestDpopProof } from "./dpop.ts";
 import { deriveAuthClientMetadata } from "./utils.ts";
+
+const credentialResponseHeaders = {
+  "cache-control": "no-store",
+  pragma: "no-cache",
+} as const;
+
+const appendCredentialResponseHeaders = HttpEffect.appendPreResponseHandler((_request, response) =>
+  Effect.succeed(HttpServerResponse.setHeaders(response, credentialResponseHeaders)),
+);
+
+const appendDpopChallengeHeader = HttpEffect.appendPreResponseHandler((_request, response) =>
+  Effect.succeed(HttpServerResponse.setHeader(response, "www-authenticate", "DPoP")),
+);
 
 export const respondToAuthError = (error: AuthError) =>
   Effect.gen(function* () {
+    const request = yield* HttpServerRequest.HttpServerRequest;
+    const usesDpop =
+      request.originalUrl.startsWith("/api/auth/token") ||
+      request.headers.authorization?.startsWith("DPoP ") === true;
     if ((error.status ?? 500) >= 500) {
       yield* Effect.logError("auth route failed", {
         message: error.message,
@@ -39,17 +63,27 @@ export const respondToAuthError = (error: AuthError) =>
       {
         error: error.message,
       },
-      { status: error.status ?? 500 },
+      {
+        status: error.status ?? 500,
+        headers: error.status === 401 && usesDpop ? { "www-authenticate": "DPoP" } : {},
+      },
     );
   });
 
 export const failEnvironmentHttpAuthError = (error: AuthError) =>
   Effect.gen(function* () {
+    const request = yield* HttpServerRequest.HttpServerRequest;
+    const usesDpop =
+      request.originalUrl.startsWith("/api/auth/token") ||
+      request.headers.authorization?.startsWith("DPoP ") === true;
     if ((error.status ?? 500) >= 500) {
       yield* Effect.logError("auth route failed", {
         message: error.message,
         cause: error.cause,
       });
+    }
+    if (error.status === 401 && usesDpop) {
+      yield* appendDpopChallengeHeader;
     }
 
     switch (error.status) {
@@ -107,14 +141,25 @@ export const authHttpApiLayer = HttpApiBuilder.group(
 
     const sessionHandler = Effect.fn("environment.auth.session")(function* () {
       const request = yield* HttpServerRequest.HttpServerRequest;
+      yield* appendCredentialResponseHeaders;
       return yield* serverAuth.getSessionState(request);
     });
 
     const bootstrapHandler = Effect.fn("environment.auth.bootstrap")(
       function* (input: { readonly payload: AuthBootstrapInput }) {
         const request = yield* HttpServerRequest.HttpServerRequest;
+        const proofKeyThumbprint =
+          request.headers.dpop || input.payload.proofKeyThumbprint
+            ? yield* verifyRequestDpopProof({
+                request,
+                ...(input.payload.proofKeyThumbprint
+                  ? { expectedThumbprint: input.payload.proofKeyThumbprint }
+                  : {}),
+              })
+            : undefined;
         const result = yield* serverAuth.exchangeBootstrapCredential(
           input.payload.credential,
+          proofKeyThumbprint ? { proofKeyThumbprint } : {},
           deriveAuthClientMetadata({ request }),
         );
         const sessionCookies = yield* Effect.fromResult(
@@ -135,6 +180,7 @@ export const authHttpApiLayer = HttpApiBuilder.group(
           ),
         );
 
+        yield* appendCredentialResponseHeaders;
         yield* HttpEffect.appendPreResponseHandler((_request, response) =>
           Effect.succeed(HttpServerResponse.mergeCookies(response, sessionCookies)),
         );
@@ -146,8 +192,46 @@ export const authHttpApiLayer = HttpApiBuilder.group(
     const bootstrapBearerHandler = Effect.fn("environment.auth.bootstrapBearer")(
       function* (input: { readonly payload: AuthBootstrapInput }) {
         const request = yield* HttpServerRequest.HttpServerRequest;
+        const proofKeyThumbprint =
+          request.headers.dpop || input.payload.proofKeyThumbprint
+            ? yield* verifyRequestDpopProof({
+                request,
+                ...(input.payload.proofKeyThumbprint
+                  ? { expectedThumbprint: input.payload.proofKeyThumbprint }
+                  : {}),
+              })
+            : undefined;
+        yield* appendCredentialResponseHeaders;
         return yield* serverAuth.exchangeBootstrapCredentialForBearerSession(
           input.payload.credential,
+          proofKeyThumbprint ? { proofKeyThumbprint } : {},
+          deriveAuthClientMetadata({ request }),
+        );
+      },
+      Effect.catchTag("AuthError", failEnvironmentHttpAuthError),
+    );
+
+    const dpopTokenHandler = Effect.fn("environment.auth.dpopToken")(
+      function* (input: { readonly payload: AuthDpopTokenExchangeRequest }) {
+        const request = yield* HttpServerRequest.HttpServerRequest;
+        const resource = new URL(requestAbsoluteUrl(request)).origin;
+        if (
+          input.payload.grant_type !== AuthTokenExchangeGrantType ||
+          input.payload.subject_token_type !== AuthEnvironmentBootstrapTokenType ||
+          input.payload.requested_token_type !== AuthAccessTokenType ||
+          input.payload.resource !== resource ||
+          !oauthScopeSetEquals(input.payload.scope, [AuthRemoteSessionScope])
+        ) {
+          return yield* new AuthError({
+            message: "Unsupported token exchange request.",
+            status: 400,
+          });
+        }
+        const proofKeyThumbprint = yield* verifyRequestDpopProof({ request });
+        yield* appendCredentialResponseHeaders;
+        return yield* serverAuth.exchangeBootstrapCredentialForDpopAccessToken(
+          input.payload.subject_token,
+          { proofKeyThumbprint },
           deriveAuthClientMetadata({ request }),
         );
       },
@@ -157,6 +241,7 @@ export const authHttpApiLayer = HttpApiBuilder.group(
     const webSocketTokenHandler = Effect.fn("environment.auth.webSocketToken")(
       function* () {
         const session = yield* EnvironmentSessionPrincipal;
+        yield* appendCredentialResponseHeaders;
         return yield* serverAuth.issueWebSocketToken(session);
       },
       Effect.catchTag("AuthError", failEnvironmentHttpAuthError),
@@ -217,6 +302,7 @@ export const authHttpApiLayer = HttpApiBuilder.group(
       .handle("session", sessionHandler)
       .handle("bootstrap", bootstrapHandler)
       .handle("bootstrapBearer", bootstrapBearerHandler)
+      .handle("dpopToken", dpopTokenHandler)
       .handle("webSocketToken", webSocketTokenHandler)
       .handle("pairingCredential", pairingCredentialHandler)
       .handle("pairingLinks", pairingLinksHandler)

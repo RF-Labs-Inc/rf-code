@@ -33,7 +33,7 @@ import {
 
 const SIGNING_SECRET_NAME = "server-signing-key";
 const DEFAULT_SESSION_TTL = Duration.days(30);
-const DEFAULT_WEBSOCKET_TOKEN_TTL = Duration.minutes(5);
+const DEFAULT_WEBSOCKET_TOKEN_TTL = Duration.minutes(1);
 
 const SessionClaims = Schema.Struct({
   v: Schema.Literal(1),
@@ -41,7 +41,8 @@ const SessionClaims = Schema.Struct({
   sid: AuthSessionId,
   sub: Schema.String,
   role: Schema.Literals(["owner", "client"]),
-  method: Schema.Literals(["browser-session-cookie", "bearer-session-token"]),
+  method: Schema.Literals(["browser-session-cookie", "bearer-session-token", "dpop-access-token"]),
+  proofKeyThumbprint: Schema.optionalKey(Schema.String),
   iat: Schema.Number,
   exp: Schema.Number,
 });
@@ -95,6 +96,7 @@ export const makeSessionCredentialService = Effect.gen(function* () {
   const serverConfig = yield* ServerConfig;
   const secretStore = yield* ServerSecretStore;
   const authSessions = yield* AuthSessionRepository;
+  const crypto = yield* Crypto.Crypto;
   const signingSecret = yield* secretStore.getOrCreateRandom(SIGNING_SECRET_NAME, 32);
   const connectedSessionsRef = yield* Ref.make(new Map<string, number>());
   const changesPubSub = yield* PubSub.unbounded<SessionCredentialChange>();
@@ -219,6 +221,7 @@ export const makeSessionCredentialService = Effect.gen(function* () {
         method: input?.method ?? "browser-session-cookie",
         iat: issuedAt.epochMilliseconds,
         exp: expiresAt.epochMilliseconds,
+        ...(input?.proofKeyThumbprint ? { proofKeyThumbprint: input.proofKeyThumbprint } : {}),
       };
 
       const encodedPayload = yield* encodeClaims(claims).pipe(
@@ -266,6 +269,7 @@ export const makeSessionCredentialService = Effect.gen(function* () {
         client,
         expiresAt: expiresAt,
         role: claims.role,
+        ...(claims.proofKeyThumbprint ? { proofKeyThumbprint: claims.proofKeyThumbprint } : {}),
       } satisfies IssuedSession;
     }).pipe(Effect.mapError(toSessionCredentialError("Failed to issue session credential.")));
 
@@ -329,6 +333,7 @@ export const makeSessionCredentialService = Effect.gen(function* () {
         expiresAt: expiresAt.value,
         subject: claims.sub,
         role: claims.role,
+        ...(claims.proofKeyThumbprint ? { proofKeyThumbprint: claims.proofKeyThumbprint } : {}),
       } satisfies VerifiedSession;
     }).pipe(
       Effect.mapError((cause) =>
