@@ -8,7 +8,16 @@ import type { KnownTerminalSession } from "@t3tools/client-runtime";
 import { SymbolView } from "expo-symbols";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, ScrollView, Text as RNText, View, useColorScheme } from "react-native";
+import {
+  Pressable,
+  ScrollView,
+  Text as RNText,
+  View,
+  useColorScheme,
+  type LayoutChangeEvent,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from "react-native";
 import {
   KeyboardController,
   KeyboardEvents,
@@ -70,6 +79,7 @@ import {
 const DEFAULT_TERMINAL_COLS = 80;
 const DEFAULT_TERMINAL_ROWS = 24;
 const TERMINAL_ACCESSORY_HEIGHT = 52;
+const TERMINAL_ACCESSORY_FADE_WIDTH = 18;
 
 type PendingModifier = "ctrl" | "meta";
 type HostPlatform = "mac" | "linux" | "windows" | "unknown";
@@ -237,6 +247,15 @@ export function ThreadTerminalRouteScreen() {
   const [fontSize, setFontSize] = useState(cachedFontSize ?? DEFAULT_TERMINAL_FONT_SIZE);
   const [keyboardFocusRequest, setKeyboardFocusRequest] = useState(0);
   const [isAccessoryDismissed, setIsAccessoryDismissed] = useState(false);
+  const toolbarScrollGeometryRef = useRef({
+    contentWidth: 0,
+    offsetX: 0,
+    viewportWidth: 0,
+  });
+  const [toolbarScrollEdges, setToolbarScrollEdges] = useState({
+    showLeftFade: false,
+    showRightFade: false,
+  });
   const hasOpenedRef = useRef(false);
   const bufferReplayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const attachStreamLogCountRef = useRef(0);
@@ -921,6 +940,64 @@ export function ThreadTerminalRouteScreen() {
     [pendingModifier, terminalId, writeInput],
   );
 
+  const updateToolbarScrollEdges = useCallback(
+    (patch: Partial<(typeof toolbarScrollGeometryRef)["current"]>) => {
+      const nextGeometry = { ...toolbarScrollGeometryRef.current, ...patch };
+      toolbarScrollGeometryRef.current = nextGeometry;
+      const nextEdges = {
+        showLeftFade: nextGeometry.offsetX > 1,
+        showRightFade:
+          nextGeometry.offsetX + nextGeometry.viewportWidth < nextGeometry.contentWidth - 1,
+      };
+
+      setToolbarScrollEdges((current) =>
+        current.showLeftFade === nextEdges.showLeftFade &&
+        current.showRightFade === nextEdges.showRightFade
+          ? current
+          : nextEdges,
+      );
+    },
+    [],
+  );
+
+  const handleToolbarLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      updateToolbarScrollEdges({ viewportWidth: event.nativeEvent.layout.width });
+    },
+    [updateToolbarScrollEdges],
+  );
+
+  const handleToolbarContentSizeChange = useCallback(
+    (contentWidth: number) => {
+      updateToolbarScrollEdges({ contentWidth });
+    },
+    [updateToolbarScrollEdges],
+  );
+
+  const handleToolbarScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      updateToolbarScrollEdges({ offsetX: event.nativeEvent.contentOffset.x });
+    },
+    [updateToolbarScrollEdges],
+  );
+
+  const handleClearTerminal = useCallback(() => {
+    if (!selectedThread) {
+      return;
+    }
+
+    const client = getEnvironmentClient(selectedThread.environmentId);
+    if (!client) {
+      return;
+    }
+
+    setPendingModifierState({ terminalId, value: null });
+    void client.terminal.clear({
+      threadId: selectedThread.id,
+      terminalId,
+    });
+  }, [selectedThread, terminalId]);
+
   const handleDismissKeyboard = useCallback(() => {
     setIsAccessoryDismissed(true);
     void KeyboardController.dismiss();
@@ -1092,55 +1169,120 @@ export function ThreadTerminalRouteScreen() {
               }}
             >
               <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
-                <ScrollView
-                  horizontal
-                  contentContainerStyle={{ alignItems: "center", gap: 6, paddingRight: 2 }}
-                  showsHorizontalScrollIndicator={false}
-                  style={{ flex: 1 }}
-                >
-                  {terminalToolbarActions.map((action) => {
-                    const active =
-                      action.kind === "modifier" && pendingModifier === action.modifier;
+                <View style={{ flex: 1, position: "relative" }}>
+                  <ScrollView
+                    horizontal
+                    contentContainerStyle={{ alignItems: "center", gap: 6, paddingRight: 2 }}
+                    onContentSizeChange={handleToolbarContentSizeChange}
+                    onLayout={handleToolbarLayout}
+                    onScroll={handleToolbarScroll}
+                    scrollEventThrottle={16}
+                    showsHorizontalScrollIndicator={false}
+                  >
+                    {terminalToolbarActions.map((action) => {
+                      const active =
+                        action.kind === "modifier" && pendingModifier === action.modifier;
 
-                    return (
-                      <Pressable
-                        key={action.key}
-                        onPress={() => handleToolbarActionPress(action)}
-                        style={({ pressed }) => ({
-                          alignItems: "center",
-                          backgroundColor: active
-                            ? withAlpha(terminalTheme.palette[10] ?? terminalTheme.foreground, "2e")
-                            : pressed
-                              ? withAlpha(terminalTheme.foreground, "1f")
-                              : withAlpha(terminalTheme.foreground, "12"),
-                          borderColor: active
-                            ? withAlpha(terminalTheme.palette[10] ?? terminalTheme.foreground, "52")
-                            : terminalTheme.border,
-                          borderRadius: 12,
-                          borderWidth: 1,
-                          justifyContent: "center",
-                          minWidth: action.label.length > 1 ? 46 : 38,
-                          paddingHorizontal: 11,
-                          paddingVertical: 8,
-                        })}
-                      >
-                        <RNText
-                          style={{
-                            color: active
-                              ? (terminalTheme.palette[10] ?? terminalTheme.foreground)
-                              : terminalTheme.foreground,
-                            fontFamily: "DMSans_700Bold",
-                            fontSize: 12,
-                            fontWeight: "700",
-                            textTransform: action.kind === "modifier" ? "uppercase" : "none",
-                          }}
+                      return (
+                        <Pressable
+                          key={action.key}
+                          onPress={() => handleToolbarActionPress(action)}
+                          style={({ pressed }) => ({
+                            alignItems: "center",
+                            backgroundColor: active
+                              ? withAlpha(
+                                  terminalTheme.palette[10] ?? terminalTheme.foreground,
+                                  "2e",
+                                )
+                              : pressed
+                                ? withAlpha(terminalTheme.foreground, "1f")
+                                : withAlpha(terminalTheme.foreground, "12"),
+                            borderColor: active
+                              ? withAlpha(
+                                  terminalTheme.palette[10] ?? terminalTheme.foreground,
+                                  "52",
+                                )
+                              : terminalTheme.border,
+                            borderRadius: 12,
+                            borderWidth: 1,
+                            justifyContent: "center",
+                            minWidth: action.label.length > 1 ? 46 : 38,
+                            paddingHorizontal: 11,
+                            paddingVertical: 8,
+                          })}
                         >
-                          {action.label}
-                        </RNText>
-                      </Pressable>
-                    );
+                          <RNText
+                            style={{
+                              color: active
+                                ? (terminalTheme.palette[10] ?? terminalTheme.foreground)
+                                : terminalTheme.foreground,
+                              fontFamily: "DMSans_700Bold",
+                              fontSize: 12,
+                              fontWeight: "700",
+                              textTransform: action.kind === "modifier" ? "uppercase" : "none",
+                            }}
+                          >
+                            {action.label}
+                          </RNText>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                  {toolbarScrollEdges.showLeftFade ? (
+                    <View
+                      pointerEvents="none"
+                      style={{
+                        bottom: 0,
+                        experimental_backgroundImage: `linear-gradient(to right, ${terminalTheme.background} 0%, ${withAlpha(terminalTheme.background, "00")} 100%)`,
+                        left: 0,
+                        position: "absolute",
+                        top: 0,
+                        width: TERMINAL_ACCESSORY_FADE_WIDTH,
+                      }}
+                    />
+                  ) : null}
+                  {toolbarScrollEdges.showRightFade ? (
+                    <View
+                      pointerEvents="none"
+                      style={{
+                        bottom: 0,
+                        experimental_backgroundImage: `linear-gradient(to right, ${withAlpha(terminalTheme.background, "00")} 0%, ${terminalTheme.background} 100%)`,
+                        position: "absolute",
+                        right: 0,
+                        top: 0,
+                        width: TERMINAL_ACCESSORY_FADE_WIDTH,
+                      }}
+                    />
+                  ) : null}
+                </View>
+                <Pressable
+                  accessibilityLabel="Clear terminal output"
+                  accessibilityRole="button"
+                  onPress={handleClearTerminal}
+                  style={({ pressed }) => ({
+                    alignItems: "center",
+                    backgroundColor: pressed
+                      ? withAlpha(terminalTheme.foreground, "1f")
+                      : withAlpha(terminalTheme.foreground, "12"),
+                    borderColor: terminalTheme.border,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    height: 38,
+                    justifyContent: "center",
+                    paddingHorizontal: 10,
                   })}
-                </ScrollView>
+                >
+                  <RNText
+                    style={{
+                      color: terminalTheme.foreground,
+                      fontFamily: "DMSans_700Bold",
+                      fontSize: 12,
+                      fontWeight: "700",
+                    }}
+                  >
+                    CLEAR
+                  </RNText>
+                </Pressable>
                 <Pressable
                   accessibilityLabel="Dismiss keyboard"
                   accessibilityRole="button"
