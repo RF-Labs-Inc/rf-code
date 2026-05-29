@@ -5,6 +5,7 @@ import {
   ThreadId,
 } from "@t3tools/contracts";
 import type { KnownTerminalSession } from "@t3tools/client-runtime";
+import { SymbolView } from "expo-symbols";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, Text as RNText, View, useColorScheme } from "react-native";
@@ -232,6 +233,7 @@ export function ThreadTerminalRouteScreen() {
     },
   );
   const [fontSize, setFontSize] = useState(cachedFontSize ?? DEFAULT_TERMINAL_FONT_SIZE);
+  const [keyboardFocusRequest, setKeyboardFocusRequest] = useState(0);
   const hasOpenedRef = useRef(false);
   const bufferReplayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const attachStreamLogCountRef = useRef(0);
@@ -398,8 +400,13 @@ export function ThreadTerminalRouteScreen() {
       { kind: "send", key: "dash", label: "-", data: "-" },
     ];
   }, [hostPlatform]);
-  const keyboardHeight = useKeyboardState((state) => (state.isVisible ? state.height : 0));
-  const terminalBottomInset = TERMINAL_ACCESSORY_HEIGHT + keyboardHeight;
+  const keyboardState = useKeyboardState((state) => ({
+    height: state.height,
+    isVisible: state.isVisible,
+  }));
+  const terminalBottomInset = keyboardState.isVisible
+    ? TERMINAL_ACCESSORY_HEIGHT + keyboardState.height
+    : 0;
 
   const terminalMenuSessions = useMemo<ReadonlyArray<TerminalMenuSession>>(
     () =>
@@ -900,6 +907,10 @@ export function ThreadTerminalRouteScreen() {
     void KeyboardController.dismiss();
   }, []);
 
+  const handleShowKeyboard = useCallback(() => {
+    setKeyboardFocusRequest((current) => current + 1);
+  }, []);
+
   if (!selectedThread) {
     if (isLoadingSavedConnection) {
       return <LoadingScreen message="Opening terminal…" />;
@@ -1037,6 +1048,7 @@ export function ThreadTerminalRouteScreen() {
             buffer={terminalSurfaceBuffer}
             fontSize={fontSize}
             isRunning={isRunning}
+            keyboardFocusRequest={keyboardFocusRequest}
             onInput={handleInput}
             onResize={handleResize}
             style={{ flex: 1 }}
@@ -1044,102 +1056,128 @@ export function ThreadTerminalRouteScreen() {
           />
         </View>
 
-        <KeyboardStickyView
-          style={{ position: "absolute", bottom: 0, left: 0, right: 0 }}
-          offset={{ closed: 0, opened: 0 }}
-        >
-          <View
-            style={{
-              backgroundColor: terminalTheme.background,
-              borderTopColor: terminalTheme.border,
-              borderTopWidth: 1,
-              minHeight: TERMINAL_ACCESSORY_HEIGHT,
-              paddingBottom: 4,
-              paddingHorizontal: 8,
-              paddingTop: 4,
-            }}
+        {keyboardState.isVisible ? (
+          <KeyboardStickyView
+            style={{ position: "absolute", bottom: 0, left: 0, right: 0 }}
+            offset={{ closed: 0, opened: 0 }}
           >
-            <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
-              <ScrollView
-                horizontal
-                contentContainerStyle={{ alignItems: "center", gap: 6, paddingRight: 2 }}
-                showsHorizontalScrollIndicator={false}
-                style={{ flex: 1 }}
-              >
-                {terminalToolbarActions.map((action) => {
-                  const active = action.kind === "modifier" && pendingModifier === action.modifier;
-
-                  return (
-                    <Pressable
-                      key={action.key}
-                      onPress={() => handleToolbarActionPress(action)}
-                      style={({ pressed }) => ({
-                        alignItems: "center",
-                        backgroundColor: active
-                          ? withAlpha(terminalTheme.palette[10] ?? terminalTheme.foreground, "2e")
-                          : pressed
-                            ? withAlpha(terminalTheme.foreground, "1f")
-                            : withAlpha(terminalTheme.foreground, "12"),
-                        borderColor: active
-                          ? withAlpha(terminalTheme.palette[10] ?? terminalTheme.foreground, "52")
-                          : terminalTheme.border,
-                        borderRadius: 12,
-                        borderWidth: 1,
-                        justifyContent: "center",
-                        minWidth: action.label.length > 1 ? 46 : 38,
-                        paddingHorizontal: 11,
-                        paddingVertical: 8,
-                      })}
-                    >
-                      <RNText
-                        style={{
-                          color: active
-                            ? (terminalTheme.palette[10] ?? terminalTheme.foreground)
-                            : terminalTheme.foreground,
-                          fontFamily: "DMSans_700Bold",
-                          fontSize: 12,
-                          fontWeight: "700",
-                          textTransform: action.kind === "modifier" ? "uppercase" : "none",
-                        }}
-                      >
-                        {action.label}
-                      </RNText>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-              <Pressable
-                accessibilityLabel="Hide keyboard"
-                accessibilityRole="button"
-                onPress={handleDismissKeyboard}
-                style={({ pressed }) => ({
-                  alignItems: "center",
-                  backgroundColor: pressed
-                    ? withAlpha(terminalTheme.foreground, "1f")
-                    : withAlpha(terminalTheme.foreground, "12"),
-                  borderColor: terminalTheme.border,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  justifyContent: "center",
-                  minWidth: 54,
-                  paddingHorizontal: 11,
-                  paddingVertical: 8,
-                })}
-              >
-                <RNText
-                  style={{
-                    color: terminalTheme.foreground,
-                    fontFamily: "DMSans_700Bold",
-                    fontSize: 12,
-                    fontWeight: "700",
-                  }}
+            <View
+              style={{
+                backgroundColor: terminalTheme.background,
+                borderTopColor: terminalTheme.border,
+                borderTopWidth: 1,
+                minHeight: TERMINAL_ACCESSORY_HEIGHT,
+                paddingBottom: 4,
+                paddingHorizontal: 8,
+                paddingTop: 4,
+              }}
+            >
+              <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
+                <ScrollView
+                  horizontal
+                  contentContainerStyle={{ alignItems: "center", gap: 6, paddingRight: 2 }}
+                  showsHorizontalScrollIndicator={false}
+                  style={{ flex: 1 }}
                 >
-                  hide
-                </RNText>
-              </Pressable>
+                  {terminalToolbarActions.map((action) => {
+                    const active =
+                      action.kind === "modifier" && pendingModifier === action.modifier;
+
+                    return (
+                      <Pressable
+                        key={action.key}
+                        onPress={() => handleToolbarActionPress(action)}
+                        style={({ pressed }) => ({
+                          alignItems: "center",
+                          backgroundColor: active
+                            ? withAlpha(terminalTheme.palette[10] ?? terminalTheme.foreground, "2e")
+                            : pressed
+                              ? withAlpha(terminalTheme.foreground, "1f")
+                              : withAlpha(terminalTheme.foreground, "12"),
+                          borderColor: active
+                            ? withAlpha(terminalTheme.palette[10] ?? terminalTheme.foreground, "52")
+                            : terminalTheme.border,
+                          borderRadius: 12,
+                          borderWidth: 1,
+                          justifyContent: "center",
+                          minWidth: action.label.length > 1 ? 46 : 38,
+                          paddingHorizontal: 11,
+                          paddingVertical: 8,
+                        })}
+                      >
+                        <RNText
+                          style={{
+                            color: active
+                              ? (terminalTheme.palette[10] ?? terminalTheme.foreground)
+                              : terminalTheme.foreground,
+                            fontFamily: "DMSans_700Bold",
+                            fontSize: 12,
+                            fontWeight: "700",
+                            textTransform: action.kind === "modifier" ? "uppercase" : "none",
+                          }}
+                        >
+                          {action.label}
+                        </RNText>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+                <Pressable
+                  accessibilityLabel="Dismiss keyboard"
+                  accessibilityRole="button"
+                  onPress={handleDismissKeyboard}
+                  style={({ pressed }) => ({
+                    alignItems: "center",
+                    backgroundColor: pressed
+                      ? withAlpha(terminalTheme.foreground, "1f")
+                      : withAlpha(terminalTheme.foreground, "12"),
+                    borderColor: terminalTheme.border,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    height: 38,
+                    justifyContent: "center",
+                    width: 48,
+                  })}
+                >
+                  <SymbolView
+                    name={{ ios: "keyboard.chevron.compact.down", android: "keyboard_hide" }}
+                    size={19}
+                    tintColor={terminalTheme.foreground}
+                    type="monochrome"
+                  />
+                </Pressable>
+              </View>
             </View>
-          </View>
-        </KeyboardStickyView>
+          </KeyboardStickyView>
+        ) : (
+          <Pressable
+            accessibilityLabel="Show keyboard"
+            accessibilityRole="button"
+            onPress={handleShowKeyboard}
+            style={({ pressed }) => ({
+              alignItems: "center",
+              backgroundColor: pressed
+                ? withAlpha(terminalTheme.foreground, "1f")
+                : withAlpha(terminalTheme.foreground, "12"),
+              borderColor: terminalTheme.border,
+              borderRadius: 18,
+              borderWidth: 1,
+              bottom: 16,
+              height: 48,
+              justifyContent: "center",
+              position: "absolute",
+              right: 16,
+              width: 56,
+            })}
+          >
+            <SymbolView
+              name={{ ios: "keyboard", android: "keyboard" }}
+              size={23}
+              tintColor={terminalTheme.foreground}
+              type="monochrome"
+            />
+          </Pressable>
+        )}
       </View>
     </>
   );

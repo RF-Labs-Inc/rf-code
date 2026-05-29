@@ -108,6 +108,13 @@ public final class T3TerminalView: ExpoView, UITextFieldDelegate {
     }
   }
 
+  var keyboardFocusRequest: Int = 0 {
+    didSet {
+      guard keyboardFocusRequest > 0, oldValue != keyboardFocusRequest else { return }
+      requestKeyboardFocus()
+    }
+  }
+
   var appearanceScheme: String = TerminalAppearanceScheme.dark.rawValue {
     didSet {
       guard oldValue != appearanceScheme else { return }

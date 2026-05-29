@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect } from "react";
+import { memo, useCallback, useEffect, useRef } from "react";
 import {
   Pressable,
   ScrollView,
@@ -33,6 +33,7 @@ interface TerminalSurfaceProps extends ViewProps {
   readonly buffer: string;
   readonly fontSize?: number;
   readonly isRunning: boolean;
+  readonly keyboardFocusRequest?: number;
   readonly theme?: TerminalTheme;
   readonly onInput: (data: string) => void;
   readonly onResize: (size: { readonly cols: number; readonly rows: number }) => void;
@@ -53,6 +54,7 @@ function estimateGridSize(input: {
 
 const FallbackTerminalSurface = memo(function FallbackTerminalSurface(props: TerminalSurfaceProps) {
   const fontSize = props.fontSize ?? 12;
+  const inputRef = useRef<TextInput>(null);
   const appearanceScheme = useColorScheme() === "light" ? "light" : "dark";
   const theme = props.theme ?? getPierreTerminalTheme(appearanceScheme);
   const statusLabel = props.isRunning
@@ -63,6 +65,12 @@ const FallbackTerminalSurface = memo(function FallbackTerminalSurface(props: Ter
     const { width, height } = event.nativeEvent.layout;
     props.onResize(estimateGridSize({ width, height, fontSize }));
   };
+
+  useEffect(() => {
+    if ((props.keyboardFocusRequest ?? 0) > 0) {
+      inputRef.current?.focus();
+    }
+  }, [props.keyboardFocusRequest]);
 
   return (
     <View
@@ -116,6 +124,7 @@ const FallbackTerminalSurface = memo(function FallbackTerminalSurface(props: Ter
         }}
       >
         <TextInput
+          ref={inputRef}
           autoCapitalize="none"
           autoCorrect={false}
           blurOnSubmit={false}
@@ -206,6 +215,7 @@ export const TerminalSurface = memo(function TerminalSurface(props: TerminalSurf
         terminalKey={props.terminalKey}
         initialBuffer={props.buffer}
         fontSize={fontSize}
+        keyboardFocusRequest={props.keyboardFocusRequest}
         themeConfig={buildGhosttyThemeConfig(theme)}
         onInput={handleNativeInput}
         onResize={handleNativeResize}

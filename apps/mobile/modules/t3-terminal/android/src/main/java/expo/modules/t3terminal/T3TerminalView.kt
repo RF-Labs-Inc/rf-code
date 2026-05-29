@@ -55,6 +55,14 @@ class T3TerminalView(context: Context, appContext: AppContext) : ExpoView(contex
       emitResize()
     }
 
+  var keyboardFocusRequest: Int = 0
+    set(value) {
+      if (value > 0 && field != value) {
+        requestKeyboardFocus()
+      }
+      field = value
+    }
+
   var appearanceScheme: String = "dark"
     set(value) {
       field = value

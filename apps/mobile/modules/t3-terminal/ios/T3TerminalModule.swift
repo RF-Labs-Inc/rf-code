@@ -17,6 +17,10 @@ public class T3TerminalModule: Module {
         view.fontSize = CGFloat(fontSize)
       }
 
+      Prop("keyboardFocusRequest") { (view: T3TerminalView, keyboardFocusRequest: Int) in
+        view.keyboardFocusRequest = keyboardFocusRequest
+      }
+
       Prop("appearanceScheme") { (view: T3TerminalView, appearanceScheme: String) in
         view.appearanceScheme = appearanceScheme
       }

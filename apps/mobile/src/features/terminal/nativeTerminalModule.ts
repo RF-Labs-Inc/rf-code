@@ -28,6 +28,7 @@ export interface NativeTerminalSurfaceProps extends ViewProps {
   readonly terminalKey: string;
   readonly initialBuffer: string;
   readonly fontSize: number;
+  readonly keyboardFocusRequest?: number;
   readonly onInput?: (event: NativeSyntheticEvent<TerminalInputEvent>) => void;
   readonly onResize?: (event: NativeSyntheticEvent<TerminalResizeEvent>) => void;
 }
