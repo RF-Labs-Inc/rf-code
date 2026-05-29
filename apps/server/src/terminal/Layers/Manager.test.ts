@@ -253,11 +253,10 @@ const createManager = (
           : {}),
       });
       const eventsRef = yield* Ref.make<ReadonlyArray<TerminalEvent>>([]);
-      const scope = yield* Effect.scope;
       const unsubscribe = yield* manager.subscribe((event) =>
         Ref.update(eventsRef, (events) => [...events, event]),
       );
-      yield* Scope.addFinalizer(scope, Effect.sync(unsubscribe));
+      yield* Effect.addFinalizer(() => Effect.sync(unsubscribe));
 
       return {
         baseDir,
@@ -298,7 +297,6 @@ it.layer(
       const { manager, ptyAdapter } = yield* createManager();
 
       yield* manager.open(openInput());
-      const scope = yield* Effect.scope;
       const attachEvents = yield* Ref.make<ReadonlyArray<TerminalAttachStreamEvent>>([]);
       const unsubscribe = yield* manager.attachStream(
         {
@@ -309,7 +307,7 @@ it.layer(
         },
         (event) => Ref.update(attachEvents, (events) => [...events, event]),
       );
-      yield* Scope.addFinalizer(scope, Effect.sync(unsubscribe));
+      yield* Effect.addFinalizer(() => Effect.sync(unsubscribe));
 
       const snapshot = (yield* Ref.get(attachEvents)).find((event) => event.type === "snapshot");
       expect(snapshot).toBeDefined();
@@ -336,7 +334,6 @@ it.layer(
         "1200 millis",
       );
 
-      const scope = yield* Effect.scope;
       const attachEvents = yield* Ref.make<ReadonlyArray<TerminalAttachStreamEvent>>([]);
       const unsubscribe = yield* manager.attachStream(
         openInput({
@@ -347,7 +344,7 @@ it.layer(
         }),
         (event) => Ref.update(attachEvents, (events) => [...events, event]),
       );
-      yield* Scope.addFinalizer(scope, Effect.sync(unsubscribe));
+      yield* Effect.addFinalizer(() => Effect.sync(unsubscribe));
 
       const snapshot = (yield* Ref.get(attachEvents)).find((event) => event.type === "snapshot");
       expect(snapshot).toBeDefined();
@@ -374,7 +371,6 @@ it.layer(
         "1200 millis",
       );
 
-      const scope = yield* Effect.scope;
       const attachEvents = yield* Ref.make<ReadonlyArray<TerminalAttachStreamEvent>>([]);
       const unsubscribe = yield* manager.attachStream(
         {
@@ -388,7 +384,7 @@ it.layer(
         },
         (event) => Ref.update(attachEvents, (events) => [...events, event]),
       );
-      yield* Scope.addFinalizer(scope, Effect.sync(unsubscribe));
+      yield* Effect.addFinalizer(() => Effect.sync(unsubscribe));
 
       const snapshot = (yield* Ref.get(attachEvents)).find((event) => event.type === "snapshot");
       expect(snapshot).toBeDefined();
@@ -1275,12 +1271,11 @@ it.layer(
       const { manager, ptyAdapter } = yield* createManager(5, {
         ptyAdapter: new FakePtyAdapter("async"),
       });
-      const scope = yield* Effect.scope;
       const subscriberEvents = yield* Ref.make<ReadonlyArray<TerminalEvent>>([]);
       const unsubscribe = yield* manager.subscribe((event) =>
         Ref.update(subscriberEvents, (events) => [...events, event]),
       );
-      yield* Scope.addFinalizer(scope, Effect.sync(unsubscribe));
+      yield* Effect.addFinalizer(() => Effect.sync(unsubscribe));
 
       yield* manager.open(openInput());
       const process = ptyAdapter.processes[0];
@@ -1305,12 +1300,11 @@ it.layer(
       const { manager } = yield* createManager();
       yield* manager.open(openInput({ threadId: "existing-thread" }));
 
-      const scope = yield* Effect.scope;
       const metadataEvents = yield* Ref.make<ReadonlyArray<TerminalMetadataStreamEvent>>([]);
       const unsubscribe = yield* manager.subscribeMetadata((event) =>
         Ref.update(metadataEvents, (events) => [...events, event]),
       );
-      yield* Scope.addFinalizer(scope, Effect.sync(unsubscribe));
+      yield* Effect.addFinalizer(() => Effect.sync(unsubscribe));
 
       const initialEvents = yield* Ref.get(metadataEvents);
       expect(initialEvents[0]).toMatchObject({
@@ -1381,12 +1375,11 @@ it.layer(
         const { manager, ptyAdapter } = yield* createManager(5, {
           ptyAdapter: new FakePtyAdapter("async"),
         });
-        const scope = yield* Effect.scope;
         const attachEvents = yield* Ref.make<ReadonlyArray<TerminalAttachStreamEvent>>([]);
         const unsubscribe = yield* manager.attachStream(openInput(), (event) =>
           Ref.update(attachEvents, (events) => [...events, event]),
         );
-        yield* Scope.addFinalizer(scope, Effect.sync(unsubscribe));
+        yield* Effect.addFinalizer(() => Effect.sync(unsubscribe));
 
         const process = ptyAdapter.processes[0];
         expect(process).toBeDefined();
@@ -1450,7 +1443,6 @@ it.layer(
         expect.objectContaining({ type: "exited", exitCode: 0, exitSignal: 0, sequence: 4 }),
       ]);
 
-      const scope = yield* Effect.scope;
       const attachEvents = yield* Ref.make<ReadonlyArray<TerminalAttachStreamEvent>>([]);
       const unsubscribe = yield* manager.attachStream(
         {
@@ -1459,7 +1451,7 @@ it.layer(
         },
         (event) => Ref.update(attachEvents, (events) => [...events, event]),
       );
-      yield* Scope.addFinalizer(scope, Effect.sync(unsubscribe));
+      yield* Effect.addFinalizer(() => Effect.sync(unsubscribe));
 
       const snapshot = (yield* Ref.get(attachEvents)).find((event) => event.type === "snapshot");
       expect(snapshot).toBeDefined();
