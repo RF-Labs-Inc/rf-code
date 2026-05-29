@@ -7,6 +7,7 @@ import {
   selectThreadTerminalUiState,
   useTerminalUiStateStore,
 } from "./terminalUiStateStore";
+import { DEFAULT_THREAD_TERMINAL_ID } from "./types";
 
 const THREAD_ID = ThreadId.make("thread-1");
 const THREAD_REF = scopeThreadRef("environment-a" as never, THREAD_ID);
@@ -45,11 +46,36 @@ describe("terminalUiStateStore actions", () => {
       THREAD_REF,
     );
     expect(terminalUiState.terminalOpen).toBe(true);
-    expect(terminalUiState.terminalIds).toEqual(["terminal-2"]);
+    expect(terminalUiState.terminalIds).toEqual([DEFAULT_THREAD_TERMINAL_ID, "terminal-2"]);
     expect(terminalUiState.activeTerminalId).toBe("terminal-2");
     expect(terminalUiState.terminalGroups).toEqual([
-      { id: "group-terminal-2", terminalIds: ["terminal-2"] },
+      {
+        id: `group-${DEFAULT_THREAD_TERMINAL_ID}`,
+        terminalIds: [DEFAULT_THREAD_TERMINAL_ID, "terminal-2"],
+      },
     ]);
+  });
+
+  it("materializes the default terminal when opening an empty drawer", () => {
+    useTerminalUiStateStore.getState().setTerminalOpen(THREAD_REF, true);
+
+    const terminalUiState = selectThreadTerminalUiState(
+      useTerminalUiStateStore.getState().terminalUiStateByThreadKey,
+      THREAD_REF,
+    );
+    expect(terminalUiState).toEqual({
+      terminalOpen: true,
+      terminalHeight: 280,
+      terminalIds: [DEFAULT_THREAD_TERMINAL_ID],
+      activeTerminalId: DEFAULT_THREAD_TERMINAL_ID,
+      terminalGroups: [
+        {
+          id: `group-${DEFAULT_THREAD_TERMINAL_ID}`,
+          terminalIds: [DEFAULT_THREAD_TERMINAL_ID],
+        },
+      ],
+      activeTerminalGroupId: `group-${DEFAULT_THREAD_TERMINAL_ID}`,
+    });
   });
 
   it("caps splits at four terminals per group", () => {

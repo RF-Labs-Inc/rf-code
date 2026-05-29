@@ -2007,6 +2007,42 @@ describe("ChatView timeline estimator parity (full app)", () => {
     }
   });
 
+  it("attaches the default terminal when opening an empty terminal drawer", async () => {
+    const mounted = await mountChatView({
+      viewport: DEFAULT_VIEWPORT,
+      snapshot: createSnapshotForTargetUser({
+        targetMessageId: "msg-user-open-empty-terminal-drawer" as MessageId,
+        targetText: "open empty terminal drawer",
+      }),
+    });
+
+    try {
+      const toggle = await waitForElement(
+        () =>
+          document.querySelector<HTMLButtonElement>('button[aria-label="Toggle terminal drawer"]'),
+        "Unable to find terminal drawer toggle.",
+      );
+      toggle.click();
+
+      await vi.waitFor(
+        () => {
+          const attachRequest = wsRequests.find(
+            (request) => request._tag === WS_METHODS.terminalAttach,
+          );
+          expect(attachRequest).toMatchObject({
+            _tag: WS_METHODS.terminalAttach,
+            threadId: THREAD_ID,
+            terminalId: DEFAULT_TERMINAL_ID,
+            cwd: "/repo/project",
+          });
+        },
+        { timeout: 8_000, interval: 16 },
+      );
+    } finally {
+      await mounted.cleanup();
+    }
+  });
+
   it("opens the project cwd with VS Code Insiders when it is the only available editor", async () => {
     setDraftThreadWithoutWorktree();
 
