@@ -5,7 +5,7 @@ import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, View, useColorScheme, useWindowDimensions } from "react-native";
 import {
-  KeyboardAwareScrollView,
+  KeyboardAvoidingView,
   KeyboardStickyView,
   useKeyboardState,
 } from "react-native-keyboard-controller";
@@ -149,146 +149,142 @@ export function ReviewCommentComposerSheet() {
 
   return (
     <View style={{ flex: 1 }}>
-      <KeyboardAwareScrollView
-        bottomOffset={target ? actionBarHeight + REVIEW_COMMENT_CONTENT_ACTION_GAP : 0}
-        contentContainerStyle={{
-          flexGrow: 1,
-          paddingHorizontal: 20,
-          paddingTop: 8,
-          paddingBottom: target
-            ? actionBarHeight + REVIEW_COMMENT_CONTENT_ACTION_GAP
-            : Math.max(insets.bottom, 18),
-        }}
-        keyboardDismissMode="interactive"
-        keyboardShouldPersistTaps="handled"
-      >
-        <View className="flex-row items-center justify-between py-2">
-          <Pressable
-            className="bg-subtle h-12 w-12 items-center justify-center rounded-full"
-            onPress={() => {
-              clearReviewCommentTarget();
-              router.dismiss();
-            }}
-          >
-            <SymbolView name="xmark" size={18} tintColor={iconTint} type="monochrome" />
-          </Pressable>
+      <KeyboardAvoidingView automaticOffset behavior="padding" style={{ flex: 1 }}>
+        <View
+          style={{
+            flex: 1,
+            paddingHorizontal: 20,
+            paddingTop: 8,
+            paddingBottom: target
+              ? actionBarHeight + REVIEW_COMMENT_CONTENT_ACTION_GAP
+              : Math.max(insets.bottom, 18),
+          }}
+        >
+          <View className="flex-row items-center justify-between py-2">
+            <Pressable
+              className="bg-subtle h-12 w-12 items-center justify-center rounded-full"
+              onPress={() => {
+                clearReviewCommentTarget();
+                router.dismiss();
+              }}
+            >
+              <SymbolView name="xmark" size={18} tintColor={iconTint} type="monochrome" />
+            </Pressable>
 
-          <Text className="text-[18px] font-t3-bold text-foreground">Add Comment</Text>
+            <Text className="text-[18px] font-t3-bold text-foreground">Add Comment</Text>
 
-          <View className="h-12 w-12" />
-        </View>
-
-        {!target ? (
-          <View className="rounded-[22px] border border-border bg-card px-4 py-5">
-            <Text className="text-[15px] font-t3-bold text-foreground">No selection</Text>
-            <Text className="mt-1 text-[13px] leading-[19px] text-foreground-muted">
-              Select a diff line or range first.
-            </Text>
+            <View className="h-12 w-12" />
           </View>
-        ) : (
-          <View className="gap-4">
-            <View className="gap-1 px-1">
-              <Text className="text-[11px] font-t3-bold uppercase text-foreground-muted">
-                {selectionLabel}
-              </Text>
-              <Text
-                className="font-mono text-[12px] leading-[17px] text-foreground-muted"
-                ellipsizeMode="middle"
-                numberOfLines={2}
-              >
-                {target.filePath}
+
+          {!target ? (
+            <View className="rounded-[22px] border border-border bg-card px-4 py-5">
+              <Text className="text-[15px] font-t3-bold text-foreground">No selection</Text>
+              <Text className="mt-1 text-[13px] leading-[19px] text-foreground-muted">
+                Select a diff line or range first.
               </Text>
             </View>
-
-            <View className="overflow-hidden rounded-[22px] border border-border bg-card">
-              <ScrollView
-                horizontal
-                bounces={false}
-                keyboardShouldPersistTaps="always"
-                showsHorizontalScrollIndicator={false}
-              >
-                <ScrollView
-                  bounces={false}
-                  scrollEnabled={selectedLines.length > REVIEW_COMMENT_PREVIEW_MAX_LINES}
-                  nestedScrollEnabled
-                  keyboardShouldPersistTaps="always"
-                  showsVerticalScrollIndicator={
-                    selectedLines.length > REVIEW_COMMENT_PREVIEW_MAX_LINES
-                  }
-                  style={{ height: previewHeight }}
+          ) : (
+            <View className="min-h-0 flex-1 gap-4">
+              <View className="gap-1 px-1">
+                <Text className="text-[11px] font-t3-bold uppercase text-foreground-muted">
+                  {selectionLabel}
+                </Text>
+                <Text
+                  className="font-mono text-[12px] leading-[17px] text-foreground-muted"
+                  ellipsizeMode="middle"
+                  numberOfLines={2}
                 >
-                  <View style={{ minWidth: previewViewportWidth }}>
-                    {selectedLines.map((line) => {
-                      const lineNumber = getReviewUnifiedLineNumber(line);
+                  {target.filePath}
+                </Text>
+              </View>
 
-                      return (
-                        <View
-                          key={line.id}
-                          className={cn("flex-row items-start", changeTone(line.change))}
-                          style={{ height: REVIEW_DIFF_LINE_HEIGHT }}
-                        >
-                          <ReviewChangeBar change={line.change} />
-                          <Text
-                            className="w-9 py-1 pr-1 text-right text-[11px] font-t3-medium text-foreground-muted"
-                            style={{ fontFamily: REVIEW_MONO_FONT_FAMILY }}
+              <View className="overflow-hidden rounded-[22px] border border-border bg-card">
+                <ScrollView
+                  horizontal
+                  bounces={false}
+                  keyboardShouldPersistTaps="always"
+                  showsHorizontalScrollIndicator={false}
+                >
+                  <ScrollView
+                    bounces={false}
+                    scrollEnabled={selectedLines.length > REVIEW_COMMENT_PREVIEW_MAX_LINES}
+                    nestedScrollEnabled
+                    keyboardShouldPersistTaps="always"
+                    showsVerticalScrollIndicator={
+                      selectedLines.length > REVIEW_COMMENT_PREVIEW_MAX_LINES
+                    }
+                    style={{ height: previewHeight }}
+                  >
+                    <View style={{ minWidth: previewViewportWidth }}>
+                      {selectedLines.map((line) => {
+                        const lineNumber = getReviewUnifiedLineNumber(line);
+
+                        return (
+                          <View
+                            key={line.id}
+                            className={cn("flex-row items-start", changeTone(line.change))}
+                            style={{ height: REVIEW_DIFF_LINE_HEIGHT }}
                           >
-                            {lineNumber ?? ""}
-                          </Text>
-                          <View className="min-w-0 flex-1 shrink-0 px-1 py-1">
-                            <DiffTokenText
-                              fallback={line.content}
-                              tokens={highlightedLinesById[line.id] ?? null}
-                              change={line.change}
-                            />
+                            <ReviewChangeBar change={line.change} />
+                            <Text
+                              className="w-9 py-1 pr-1 text-right text-[11px] font-t3-medium text-foreground-muted"
+                              style={{ fontFamily: REVIEW_MONO_FONT_FAMILY }}
+                            >
+                              {lineNumber ?? ""}
+                            </Text>
+                            <View className="min-w-0 flex-1 shrink-0 px-1 py-1">
+                              <DiffTokenText
+                                fallback={line.content}
+                                tokens={highlightedLinesById[line.id] ?? null}
+                                change={line.change}
+                              />
+                            </View>
                           </View>
-                        </View>
-                      );
-                    })}
-                  </View>
-                </ScrollView>
-              </ScrollView>
-            </View>
-
-            <View className="gap-2">
-              <Text className="text-[13px] font-t3-bold text-foreground">Comment</Text>
-              <View
-                className="overflow-hidden rounded-[20px] border border-border bg-card"
-                style={{ height: 172 }}
-              >
-                <View className="flex-1 px-4 pt-3.5">
-                  <TextInputWrapper onPaste={handleNativePaste}>
-                    <TextInput
-                      autoFocus
-                      multiline
-                      placeholder="Leave a comment..."
-                      textAlignVertical="top"
-                      value={commentText}
-                      onChangeText={setCommentText}
-                      className="flex-1 border-0 bg-transparent px-0 py-0 font-sans text-[15px]"
-                    />
-                  </TextInputWrapper>
-                </View>
-                {attachments.length > 0 ? (
-                  <View className="px-4 pb-3 pt-2">
-                    <ComposerAttachmentStrip
-                      attachments={attachments}
-                      imageBorderRadius={16}
-                      imageSize={60}
-                      onPressImage={setPreviewImageUri}
-                      removeButtonPlacement="gutter"
-                      onRemove={(imageId) => {
-                        setAttachments((current) =>
-                          current.filter((image) => image.id !== imageId),
                         );
-                      }}
-                    />
+                      })}
+                    </View>
+                  </ScrollView>
+                </ScrollView>
+              </View>
+
+              <View className="min-h-0 flex-1 gap-2">
+                <Text className="text-[13px] font-t3-bold text-foreground">Comment</Text>
+                <View className="min-h-[132px] flex-1 overflow-hidden rounded-[20px] border border-border bg-card">
+                  <View className="flex-1 px-4 pt-3.5">
+                    <TextInputWrapper onPaste={handleNativePaste}>
+                      <TextInput
+                        autoFocus
+                        multiline
+                        placeholder="Leave a comment..."
+                        textAlignVertical="top"
+                        value={commentText}
+                        onChangeText={setCommentText}
+                        className="flex-1 border-0 bg-transparent px-0 py-0 font-sans text-[15px]"
+                      />
+                    </TextInputWrapper>
                   </View>
-                ) : null}
+                  {attachments.length > 0 ? (
+                    <View className="px-4 pb-3 pt-2">
+                      <ComposerAttachmentStrip
+                        attachments={attachments}
+                        imageBorderRadius={16}
+                        imageSize={60}
+                        onPressImage={setPreviewImageUri}
+                        removeButtonPlacement="gutter"
+                        onRemove={(imageId) => {
+                          setAttachments((current) =>
+                            current.filter((image) => image.id !== imageId),
+                          );
+                        }}
+                      />
+                    </View>
+                  ) : null}
+                </View>
               </View>
             </View>
-          </View>
-        )}
-      </KeyboardAwareScrollView>
+          )}
+        </View>
+      </KeyboardAvoidingView>
       {target ? (
         <KeyboardStickyView style={{ position: "absolute", bottom: 0, left: 0, right: 0 }}>
           <View
