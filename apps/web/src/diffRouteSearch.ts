@@ -6,6 +6,8 @@ export interface DiffRouteSearch {
   diffFilePath?: string | undefined;
   /** When "1", the in-chat editor side panel is open. */
   editor?: "1" | undefined;
+  /** Relative path to open in the in-chat editor side panel. */
+  editorFile?: string | undefined;
 }
 
 function isDiffOpenValue(value: unknown): boolean {
@@ -27,17 +29,40 @@ export function stripDiffSearchParams<T extends Record<string, unknown>>(
   return rest as Omit<T, "diff" | "diffTurnId" | "diffFilePath">;
 }
 
+export function stripRightPanelSearchParams<T extends Record<string, unknown>>(
+  params: T,
+): Omit<T, "diff" | "diffTurnId" | "diffFilePath" | "editor" | "editorFile"> & DiffRouteSearch {
+  const {
+    diff: _diff,
+    diffTurnId: _diffTurnId,
+    diffFilePath: _diffFilePath,
+    editor: _editor,
+    editorFile: _editorFile,
+    ...rest
+  } = params;
+  return {
+    ...rest,
+    diff: undefined,
+    diffTurnId: undefined,
+    diffFilePath: undefined,
+    editor: undefined,
+    editorFile: undefined,
+  } as Omit<T, "diff" | "diffTurnId" | "diffFilePath" | "editor" | "editorFile"> & DiffRouteSearch;
+}
+
 export function parseDiffRouteSearch(search: Record<string, unknown>): DiffRouteSearch {
   const diff = isDiffOpenValue(search.diff) ? "1" : undefined;
   const diffTurnIdRaw = diff ? normalizeSearchString(search.diffTurnId) : undefined;
   const diffTurnId = diffTurnIdRaw ? TurnId.make(diffTurnIdRaw) : undefined;
   const diffFilePath = diff && diffTurnId ? normalizeSearchString(search.diffFilePath) : undefined;
   const editor = isDiffOpenValue(search.editor) ? "1" : undefined;
+  const editorFile = editor ? normalizeSearchString(search.editorFile) : undefined;
 
   return {
     ...(diff ? { diff } : {}),
     ...(diffTurnId ? { diffTurnId } : {}),
     ...(diffFilePath ? { diffFilePath } : {}),
     ...(editor ? { editor } : {}),
+    ...(editorFile ? { editorFile } : {}),
   };
 }

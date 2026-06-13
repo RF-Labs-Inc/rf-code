@@ -84,6 +84,30 @@ describe("ChatMarkdown", () => {
     }
   });
 
+  it("uses the provided file-link opener instead of the external editor launcher", async () => {
+    const onOpenFileLink = vi.fn();
+    const screen = await render(
+      <ChatMarkdown
+        text="[package.json](path/to/package.json)"
+        cwd="/repo/project"
+        onOpenFileLink={onOpenFileLink}
+      />,
+    );
+
+    try {
+      await page.getByRole("link", { name: "package.json" }).click();
+
+      expect(onOpenFileLink).toHaveBeenCalledWith({
+        filePath: "/repo/project/path/to/package.json",
+        targetPath: "/repo/project/path/to/package.json",
+        displayPath: "project/path/to/package.json",
+      });
+      expect(openInPreferredEditorMock).not.toHaveBeenCalled();
+    } finally {
+      await screen.unmount();
+    }
+  });
+
   it("shows column information inline when present", async () => {
     const filePath =
       "/Users/yashsingh/p/sco/claude-code-extract/src/utils/permissions/PermissionRule.ts";

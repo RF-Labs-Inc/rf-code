@@ -31,6 +31,12 @@ export interface MarkdownFileLinkMeta {
   column?: number;
 }
 
+export interface MarkdownFileLinkOpenTarget {
+  filePath: string;
+  targetPath: string;
+  displayPath: string;
+}
+
 function safeDecode(value: string): string {
   try {
     return decodeURIComponent(value);
@@ -172,6 +178,24 @@ export function resolveMarkdownFileLinkTarget(
 function basenameOfPath(path: string): string {
   const separatorIndex = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
   return separatorIndex >= 0 ? path.slice(separatorIndex + 1) : path;
+}
+
+function normalizeWorkspacePath(path: string): string {
+  return path.replaceAll("\\", "/").replace(/\/+$/g, "");
+}
+
+export function resolveWorkspaceRelativeFilePath(
+  filePath: string,
+  workspaceRoot: string | undefined,
+): string | null {
+  if (!workspaceRoot) return null;
+  const normalizedFilePath = normalizeWorkspacePath(filePath);
+  const normalizedWorkspaceRoot = normalizeWorkspacePath(workspaceRoot);
+  if (normalizedFilePath === normalizedWorkspaceRoot) return "";
+  const workspacePrefix = `${normalizedWorkspaceRoot}/`;
+  if (!normalizedFilePath.startsWith(workspacePrefix)) return null;
+  const relativePath = normalizedFilePath.slice(workspacePrefix.length);
+  return relativePath.length > 0 ? relativePath : null;
 }
 
 export function resolveMarkdownFileLinkMeta(

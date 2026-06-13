@@ -56,6 +56,7 @@ import {
   serializeTableElementToMarkdown,
 } from "../markdown-clipboard";
 import {
+  type MarkdownFileLinkOpenTarget,
   normalizeMarkdownLinkDestination,
   resolveMarkdownFileLinkMeta,
   rewriteMarkdownFileUriHref,
@@ -92,6 +93,7 @@ interface ChatMarkdownProps {
   className?: string;
   /** Treat single newlines as hard breaks — chat-style user input. */
   lineBreaks?: boolean;
+  onOpenFileLink?: ((target: MarkdownFileLinkOpenTarget) => void) | undefined;
 }
 
 const EMPTY_MARKDOWN_SKILLS: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">> = [];
@@ -672,6 +674,7 @@ interface MarkdownFileLinkProps {
   copyMarkdown: string;
   theme: "light" | "dark";
   className?: string | undefined;
+  onOpenFileLink?: ((target: MarkdownFileLinkOpenTarget) => void) | undefined;
 }
 
 const MARKDOWN_LINK_HREF_PATTERN = /\[[^\]]*]\(([^)\s]+)(?:\s+["'][^"']*["'])?\)/g;
@@ -947,8 +950,14 @@ const MarkdownFileLink = memo(function MarkdownFileLink({
   copyMarkdown,
   theme,
   className,
+  onOpenFileLink,
 }: MarkdownFileLinkProps) {
   const handleOpen = useCallback(() => {
+    if (onOpenFileLink) {
+      onOpenFileLink({ filePath, targetPath, displayPath });
+      return;
+    }
+
     const api = readLocalApi();
     if (!api) {
       toastManager.add({
@@ -967,7 +976,7 @@ const MarkdownFileLink = memo(function MarkdownFileLink({
         }),
       );
     });
-  }, [targetPath]);
+  }, [displayPath, filePath, onOpenFileLink, targetPath]);
 
   const handleReveal = useCallback(() => {
     const api = readLocalApi();
@@ -1108,7 +1117,8 @@ function areMarkdownFileLinkPropsEqual(
     previous.label === next.label &&
     previous.copyMarkdown === next.copyMarkdown &&
     previous.theme === next.theme &&
-    previous.className === next.className
+    previous.className === next.className &&
+    previous.onOpenFileLink === next.onOpenFileLink
   );
 }
 
@@ -1119,6 +1129,7 @@ function ChatMarkdown({
   skills = EMPTY_MARKDOWN_SKILLS,
   className,
   lineBreaks = false,
+  onOpenFileLink,
 }: ChatMarkdownProps) {
   const { resolvedTheme } = useTheme();
   const diffThemeName = resolveDiffThemeName(resolvedTheme);
@@ -1230,6 +1241,7 @@ function ChatMarkdown({
             copyMarkdown={`[${fileLinkMeta.basename}](${normalizedHref})`}
             theme={resolvedTheme}
             className={props.className}
+            onOpenFileLink={onOpenFileLink}
           />
         );
       },
@@ -1273,6 +1285,7 @@ function ChatMarkdown({
       fileLinkParentSuffixByPath,
       isStreaming,
       markdownFileLinkMetaByHref,
+      onOpenFileLink,
       resolvedTheme,
       skills,
     ],
