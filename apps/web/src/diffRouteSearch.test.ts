@@ -71,4 +71,23 @@ describe("parseDiffRouteSearch", () => {
       diff: "1",
     });
   });
+
+  it("parses editor file paths only while the editor is open", () => {
+    expect(
+      parseDiffRouteSearch({
+        editor: "1",
+        editorFile: "apps/web/src/ChatView.tsx",
+      }),
+    ).toEqual({
+      editor: "1",
+      editorFile: "apps/web/src/ChatView.tsx",
+    });
+
+    expect(
+      parseDiffRouteSearch({
+        editor: "0",
+        editorFile: "apps/web/src/ChatView.tsx",
+      }),
+    ).toEqual({});
+  });
 });

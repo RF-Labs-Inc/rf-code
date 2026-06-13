@@ -88,6 +88,7 @@ import {
 } from "./userMessageTerminalContexts";
 import { SkillInlineText } from "./SkillInlineText";
 import { formatWorkspaceRelativePath } from "../../filePathDisplay";
+import type { MarkdownFileLinkOpenTarget } from "../../markdown-links";
 import {
   buildReviewCommentRenderablePatch,
   parseReviewCommentMessageSegments,
@@ -112,6 +113,7 @@ interface TimelineRowSharedState {
   onRevertUserMessage: (messageId: MessageId) => void;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
+  onOpenFileLink?: ((target: MarkdownFileLinkOpenTarget) => void) | undefined;
   onToggleTurnFold: (turnId: TurnId) => void;
 }
 
@@ -141,6 +143,7 @@ interface MessagesTimelineProps {
   turnDiffSummaryByAssistantMessageId: Map<MessageId, TurnDiffSummary>;
   routeThreadKey: string;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
+  onOpenFileLink?: ((target: MarkdownFileLinkOpenTarget) => void) | undefined;
   revertTurnCountByUserMessageId: Map<MessageId, number>;
   onRevertUserMessage: (messageId: MessageId) => void;
   isRevertingCheckpoint: boolean;
@@ -168,6 +171,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   turnDiffSummaryByAssistantMessageId,
   routeThreadKey,
   onOpenTurnDiff,
+  onOpenFileLink,
   revertTurnCountByUserMessageId,
   onRevertUserMessage,
   isRevertingCheckpoint,
@@ -308,6 +312,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onRevertUserMessage,
       onImageExpand,
       onOpenTurnDiff,
+      onOpenFileLink,
       onToggleTurnFold,
     }),
     [
@@ -321,6 +326,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onRevertUserMessage,
       onImageExpand,
       onOpenTurnDiff,
+      onOpenFileLink,
       onToggleTurnFold,
     ],
   );
@@ -467,6 +473,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
           terminalContexts={terminalContexts}
           skills={ctx.skills}
           markdownCwd={ctx.markdownCwd}
+          onOpenFileLink={ctx.onOpenFileLink}
         />
       </div>
       <div className="flex w-full max-w-[80%] items-center justify-end pe-1 text-xs tabular-nums opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover:opacity-100">
@@ -548,6 +555,7 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
           cwd={ctx.markdownCwd}
           isStreaming={Boolean(row.message.streaming)}
           skills={ctx.skills}
+          onOpenFileLink={ctx.onOpenFileLink}
         />
         <AssistantChangedFilesSection
           turnSummary={row.assistantTurnDiffSummary}
@@ -611,6 +619,7 @@ function ProposedPlanTimelineRow({
         environmentId={ctx.activeThreadEnvironmentId}
         cwd={ctx.markdownCwd}
         workspaceRoot={ctx.workspaceRoot}
+        onOpenFileLink={ctx.onOpenFileLink}
       />
     </div>
   );
@@ -920,6 +929,7 @@ const CollapsibleUserMessageBody = memo(function CollapsibleUserMessageBody(prop
   terminalContexts: ParsedTerminalContextEntry[];
   skills: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
   markdownCwd: string | undefined;
+  onOpenFileLink?: ((target: MarkdownFileLinkOpenTarget) => void) | undefined;
   footer?: ReactNode;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -950,6 +960,7 @@ const CollapsibleUserMessageBody = memo(function CollapsibleUserMessageBody(prop
             terminalContexts={props.terminalContexts}
             skills={props.skills}
             markdownCwd={props.markdownCwd}
+            onOpenFileLink={props.onOpenFileLink}
           />
         </div>
       ) : null}
@@ -988,6 +999,7 @@ const UserMessageBody = memo(function UserMessageBody(props: {
   terminalContexts: ParsedTerminalContextEntry[];
   skills: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
   markdownCwd: string | undefined;
+  onOpenFileLink?: ((target: MarkdownFileLinkOpenTarget) => void) | undefined;
 }) {
   const renderInlineMarkdownSegment = (text: string, key: string) => {
     const leadingWhitespace = /^\s+/.exec(text)?.[0] ?? "";
@@ -1008,6 +1020,7 @@ const UserMessageBody = memo(function UserMessageBody(props: {
             skills={props.skills}
             className="text-foreground"
             lineBreaks
+            onOpenFileLink={props.onOpenFileLink}
           />
         ) : null}
         {trailingWhitespace ? <span aria-hidden="true">{trailingWhitespace}</span> : null}
@@ -1029,6 +1042,7 @@ const UserMessageBody = memo(function UserMessageBody(props: {
                   skills={props.skills}
                   className="text-foreground"
                   lineBreaks
+                  onOpenFileLink={props.onOpenFileLink}
                 />
               </div>
             ) : null
@@ -1116,6 +1130,7 @@ const UserMessageBody = memo(function UserMessageBody(props: {
           skills={props.skills}
           className="text-foreground"
           lineBreaks
+          onOpenFileLink={props.onOpenFileLink}
         />,
       );
     } else if (inlinePrefix.length === 0) {
@@ -1140,6 +1155,7 @@ const UserMessageBody = memo(function UserMessageBody(props: {
       skills={props.skills}
       className="text-foreground"
       lineBreaks
+      onOpenFileLink={props.onOpenFileLink}
     />
   );
 });

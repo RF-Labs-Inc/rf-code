@@ -44,7 +44,7 @@ import { usePrimaryEnvironmentId } from "../environments/primary";
 import { readEnvironmentApi } from "../environmentApi";
 import { isElectron } from "../env";
 import { readLocalApi } from "../localApi";
-import { parseDiffRouteSearch, stripDiffSearchParams } from "../diffRouteSearch";
+import { parseDiffRouteSearch, stripRightPanelSearchParams } from "../diffRouteSearch";
 import {
   collapseExpandedComposerCursor,
   parseStandaloneComposerSlashCommand,
@@ -105,6 +105,10 @@ import ThreadTerminalDrawer from "./ThreadTerminalDrawer";
 import { ChevronDownIcon, TriangleAlertIcon, WifiOffIcon } from "lucide-react";
 import { cn, randomHex } from "~/lib/utils";
 import { stackedThreadToast, toastManager } from "./ui/toast";
+import {
+  type MarkdownFileLinkOpenTarget,
+  resolveWorkspaceRelativeFilePath,
+} from "../markdown-links";
 import { decodeProjectScriptKeybindingRule } from "~/lib/projectScriptKeybindings";
 import { type NewProjectScriptInput } from "./ProjectScriptsControl";
 import {
@@ -1941,9 +1945,9 @@ export default function ChatView(props: ChatViewProps) {
       },
       replace: true,
       search: (previous) => {
-        const rest = stripDiffSearchParams(previous);
+        const rest = stripRightPanelSearchParams(previous);
         // Diff and editor share the right panel slot — opening one closes the other.
-        return diffOpen ? { ...rest, diff: undefined } : { ...rest, diff: "1", editor: undefined };
+        return diffOpen ? rest : { ...rest, diff: "1" };
       },
     });
   }, [diffOpen, environmentId, isServerThread, navigate, onDiffPanelOpen, threadId]);
@@ -1960,10 +1964,8 @@ export default function ChatView(props: ChatViewProps) {
       },
       replace: true,
       search: (previous) => {
-        const rest = stripDiffSearchParams(previous);
-        return editorOpen
-          ? { ...rest, editor: undefined }
-          : { ...rest, editor: "1", diff: undefined };
+        const rest = stripRightPanelSearchParams(previous);
+        return editorOpen ? rest : { ...rest, editor: "1" };
       },
     });
   }, [editorOpen, environmentId, isServerThread, navigate, threadId]);
@@ -3789,7 +3791,7 @@ export default function ChatView(props: ChatViewProps) {
           threadId,
         },
         search: (previous) => {
-          const rest = stripDiffSearchParams(previous);
+          const rest = stripRightPanelSearchParams(previous);
           return filePath
             ? { ...rest, diff: "1", diffTurnId: turnId, diffFilePath: filePath }
             : { ...rest, diff: "1", diffTurnId: turnId };
@@ -3797,6 +3799,38 @@ export default function ChatView(props: ChatViewProps) {
       });
     },
     [environmentId, isServerThread, navigate, onDiffPanelOpen, threadId],
+  );
+  const onOpenFileLink = useCallback(
+    (target: MarkdownFileLinkOpenTarget) => {
+      if (!isServerThread) {
+        return;
+      }
+
+      const relativePath = resolveWorkspaceRelativeFilePath(target.filePath, activeWorkspaceRoot);
+      if (!relativePath) {
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: "Cannot open file in editor",
+            description: "The file link is outside this thread's workspace.",
+          }),
+        );
+        return;
+      }
+
+      void navigate({
+        to: "/$environmentId/$threadId",
+        params: {
+          environmentId,
+          threadId,
+        },
+        search: (previous) => {
+          const rest = stripRightPanelSearchParams(previous);
+          return { ...rest, editor: "1", editorFile: relativePath };
+        },
+      });
+    },
+    [activeWorkspaceRoot, environmentId, isServerThread, navigate, threadId],
   );
   // Both the Map and the revert handler are read from refs at call-time so
   // the callback reference is fully stable and never busts context identity.
@@ -3889,6 +3923,7 @@ export default function ChatView(props: ChatViewProps) {
               activeThreadEnvironmentId={activeThread.environmentId}
               routeThreadKey={routeThreadKey}
               onOpenTurnDiff={onOpenTurnDiff}
+              onOpenFileLink={onOpenFileLink}
               revertTurnCountByUserMessageId={revertTurnCountByUserMessageId}
               onRevertUserMessage={onRevertUserMessage}
               isRevertingCheckpoint={isRevertingCheckpoint}

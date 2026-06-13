@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   resolveMarkdownFileLinkMeta,
   resolveMarkdownFileLinkTarget,
+  resolveWorkspaceRelativeFilePath,
   rewriteMarkdownFileUriHref,
 } from "./markdown-links";
 
@@ -31,6 +32,32 @@ describe("rewriteMarkdownFileUriHref", () => {
     expect(
       rewriteMarkdownFileUriHref(" <file:///D:/Programme/t3code/apps/web/src/markdown-links.ts> "),
     ).toBe("D:/Programme/t3code/apps/web/src/markdown-links.ts");
+  });
+});
+
+describe("resolveWorkspaceRelativeFilePath", () => {
+  it("returns an editor-ready relative path for files inside the workspace", () => {
+    expect(
+      resolveWorkspaceRelativeFilePath(
+        "/Users/julius/project/apps/web/src/main.ts",
+        "/Users/julius/project",
+      ),
+    ).toBe("apps/web/src/main.ts");
+  });
+
+  it("normalizes backslashes before comparing workspace paths", () => {
+    expect(
+      resolveWorkspaceRelativeFilePath(
+        "C:\\Users\\julius\\project\\apps\\web\\src\\main.ts",
+        "C:\\Users\\julius\\project",
+      ),
+    ).toBe("apps/web/src/main.ts");
+  });
+
+  it("rejects files outside the workspace", () => {
+    expect(
+      resolveWorkspaceRelativeFilePath("/Users/julius/other/src/main.ts", "/Users/julius/project"),
+    ).toBeNull();
   });
 });
 

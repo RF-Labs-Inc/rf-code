@@ -16,7 +16,7 @@ import { finalizePromotedDraftThreadByRef, useComposerDraftStore } from "../comp
 import {
   type DiffRouteSearch,
   parseDiffRouteSearch,
-  stripDiffSearchParams,
+  stripRightPanelSearchParams,
 } from "../diffRouteSearch";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../rightPanelLayout";
@@ -43,10 +43,11 @@ interface EditorTarget {
 
 const EditorPanelInlineSidebar = (props: {
   editorTarget: EditorTarget;
+  openFilePath?: string | undefined;
   onClose: () => void;
   onMention: (ref: EditorMentionRef) => void;
 }) => {
-  const { editorTarget, onClose, onMention } = props;
+  const { editorTarget, openFilePath, onClose, onMention } = props;
   return (
     <SidebarProvider
       defaultOpen={false}
@@ -75,6 +76,7 @@ const EditorPanelInlineSidebar = (props: {
           variant="sidebar"
           onClose={onClose}
           onMention={onMention}
+          openFilePath={openFilePath}
         />
         <SidebarRail />
       </Sidebar>
@@ -227,6 +229,7 @@ function ChatThreadRouteView() {
   const environmentHasAnyThreads = environmentHasServerThreads || environmentHasDraftThreads;
   const diffOpen = search.diff === "1";
   const editorOpen = search.editor === "1";
+  const editorFilePath = editorOpen ? search.editorFile : undefined;
   const project = useStore(
     useMemo(
       () =>
@@ -241,7 +244,7 @@ function ChatThreadRouteView() {
       ? {
           environmentId: serverThread.environmentId,
           projectId: serverThread.projectId,
-          cwd: project.cwd,
+          cwd: serverThread.worktreePath ?? project.cwd,
           name: project.name,
         }
       : null;
@@ -285,8 +288,8 @@ function ChatThreadRouteView() {
       to: "/$environmentId/$threadId",
       params: buildThreadRouteParams(threadRef),
       search: (previous) => {
-        const rest = stripDiffSearchParams(previous);
-        return { ...rest, diff: "1", editor: undefined };
+        const rest = stripRightPanelSearchParams(previous);
+        return { ...rest, diff: "1" };
       },
     });
   }, [markDiffOpened, navigate, threadRef]);
@@ -297,7 +300,10 @@ function ChatThreadRouteView() {
     void navigate({
       to: "/$environmentId/$threadId",
       params: buildThreadRouteParams(threadRef),
-      search: (previous) => ({ ...previous, editor: undefined }),
+      search: (previous) => {
+        const rest = stripRightPanelSearchParams(previous);
+        return rest;
+      },
     });
   }, [navigate, threadRef]);
   const editorMention = useCallback(
@@ -349,6 +355,7 @@ function ChatThreadRouteView() {
         {editorActive ? (
           <EditorPanelInlineSidebar
             editorTarget={editorTarget}
+            openFilePath={editorFilePath}
             onClose={closeEditor}
             onMention={editorMention}
           />
@@ -384,6 +391,7 @@ function ChatThreadRouteView() {
             variant="sidebar"
             onClose={closeEditor}
             onMention={editorMention}
+            openFilePath={editorFilePath}
           />
         </RightPanelSheet>
       ) : (
@@ -398,7 +406,7 @@ function ChatThreadRouteView() {
 export const Route = createFileRoute("/_chat/$environmentId/$threadId")({
   validateSearch: (search) => parseDiffRouteSearch(search),
   search: {
-    middlewares: [retainSearchParams<DiffRouteSearch>(["diff", "editor"])],
+    middlewares: [retainSearchParams<DiffRouteSearch>(["diff", "editor", "editorFile"])],
   },
   component: ChatThreadRouteView,
 });
