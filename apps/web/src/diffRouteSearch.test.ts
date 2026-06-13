@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { parseDiffRouteSearch } from "./diffRouteSearch";
+import { parseDiffRouteSearch, stripRightPanelSearchParams } from "./diffRouteSearch";
 
 describe("parseDiffRouteSearch", () => {
   it("parses valid diff search values", () => {
@@ -89,5 +89,27 @@ describe("parseDiffRouteSearch", () => {
         editorFile: "apps/web/src/ChatView.tsx",
       }),
     ).toEqual({});
+  });
+});
+
+describe("stripRightPanelSearchParams", () => {
+  it("explicitly clears retained diff and editor params", () => {
+    expect(
+      stripRightPanelSearchParams({
+        diff: "1",
+        diffTurnId: "turn-1",
+        diffFilePath: "src/app.ts",
+        editor: "1",
+        editorFile: "src/app.ts",
+        unrelated: "keep",
+      }),
+    ).toEqual({
+      diff: undefined,
+      diffTurnId: undefined,
+      diffFilePath: undefined,
+      editor: undefined,
+      editorFile: undefined,
+      unrelated: "keep",
+    });
   });
 });

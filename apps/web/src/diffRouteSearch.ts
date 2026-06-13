@@ -40,8 +40,14 @@ export function stripRightPanelSearchParams<T extends Record<string, unknown>>(
     editorFile: _editorFile,
     ...rest
   } = params;
-  return rest as Omit<T, "diff" | "diffTurnId" | "diffFilePath" | "editor" | "editorFile"> &
-    DiffRouteSearch;
+  return {
+    ...rest,
+    diff: undefined,
+    diffTurnId: undefined,
+    diffFilePath: undefined,
+    editor: undefined,
+    editorFile: undefined,
+  } as Omit<T, "diff" | "diffTurnId" | "diffFilePath" | "editor" | "editorFile"> & DiffRouteSearch;
 }
 
 export function parseDiffRouteSearch(search: Record<string, unknown>): DiffRouteSearch {

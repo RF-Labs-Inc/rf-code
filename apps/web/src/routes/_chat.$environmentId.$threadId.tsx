@@ -276,7 +276,7 @@ function ChatThreadRouteView() {
     void navigate({
       to: "/$environmentId/$threadId",
       params: buildThreadRouteParams(threadRef),
-      search: { diff: undefined },
+      search: (previous) => stripRightPanelSearchParams(previous),
     });
   }, [navigate, threadRef]);
   const openDiff = useCallback(() => {
